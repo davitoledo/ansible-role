@@ -1,0 +1,122 @@
+- name: "Configuring Tower-Cli to AWX-{{ env }}" 
+  block:
+    - name: "Config tower-cli to change {{ awx_url }}"
+      ansible.builtin.shell: tower-cli config host {{ awx_url }}
+      
+    - name: Config user ...
+      no_log: true
+      ansible.builtin.shell: tower-cli config username {{ awx_user }}
+    
+    - name: Config Token ...
+      no_log: true
+      ansible.builtin.shell: tower-cli config oauth_token {{ awx_token }}
+      
+    - name: Config SSL ...
+      no_log: true
+      ansible.builtin.shell: tower-cli config verify_ssl false
+  tags:
+    - never
+    - start_schedule
+    - stop_schedule
+         
+- name: "Create a Schedule BKP for {{ awx_url }}"
+  block: 
+    - name: Creating a json BKP file ...  
+      ansible.builtin.shell: tower-cli schedule list -Q enabled true -a -f json > /tmp/awx_schedule_{{ env }}.json
+
+    - name: Upload BKP to AWS
+      amazon.aws.aws_s3:
+        region: sa-east-1
+        bucket: awx-objects
+        object: "awx_schedule_{{ env }}.json"
+        src: "/tmp/awx_schedule_{{ env }}.json"
+        mode: put 
+  tags:
+    - never
+    - stop_schedule
+
+- name: Download BKP from AWS
+  amazon.aws.aws_s3:
+    region: sa-east-1
+    bucket: awx-objects
+    object: "awx_schedule_{{ env }}.json"
+    dest: "/tmp/awx_schedule_{{ env }}.json"
+    mode: get 
+  tags:
+    - never
+    - start_schedule
+
+- name: Listing schedules IDs
+  block:
+    - name: Getting ID of Schedules 
+      ansible.builtin.shell: jq -r .results[].id /tmp/awx_schedule_{{ env }}.json
+      register: schedule_id
+   
+    - name: Show ID of Schedules
+      ansible.builtin.debug:
+        msg: "{{ schedule_id.stdout_lines }}"
+  tags:
+    - never
+    - start_schedule
+    - stop_schedule
+
+- name: Stop schedules in AWX-{{ env }}
+  ansible.builtin.shell: tower-cli schedule modify --enabled false {{ item }}
+  loop: "{{ q('items', schedule_id.stdout_lines) }}"
+  tags:
+    - never
+    - stop_schedule
+
+- name: Start schedules in AWX-{{ env }}
+  ansible.builtin.shell: tower-cli schedule modify --enabled true {{ item }}
+  loop: "{{ q('items', schedule_id.stdout_lines) }}"
+  tags:
+    - never
+    - start_schedule
+
+- name: List Active Schedule in AWX-{{ env }}
+  block: 
+    - name: Show Schedules ...
+      ansible.builtin.shell: tower-cli schedule list -Q enabled true -a
+      register: active_schedules
+
+    - ansible.builtin.debug:
+        msg: "{{ active_schedules.stdout_lines }}" 
+  tags:
+    - never
+    - start_schedule
+    - stop_schedule
+
+# USE TO GCP STORAGE 
+# - name: Upload Bkp actual state schedules in GCP
+#   community.google.gc_storage:
+#     region: southamerica-east1
+#     # gs_access_key: "{{ lookup('env','gs_access_key') }}"
+#     # gs_secret_key: "{{ lookup('env','gs_secret_key') }}"
+#     gs_access_key: "{{ vault_secrets.gcp_access_key }}"
+#     gs_secret_key: "{{ vault_secrets.gcp_secret }}"
+#     bucket: awx_{{ env }}_objects
+#     object: "awx_schedule_{{ env }}.json" 
+#     src: "/tmp/awx_schedule_{{ env }}.json"
+#     mode: put 
+#     overwrite: yes
+#     versioning: yes
+#   tags: 
+#     - never
+#     - stop_schedule
+
+# - name: Restore last state schedules from GCP
+#   community.google.gc_storage:
+#     region: southamerica-east1
+#     # gs_access_key: "{{ gcp_access_key }}"
+#     # gs_secret_key: "{{ gcp_secret }}"
+#     gs_access_key: "{{ vault_secrets.gcp_access_key }}"
+#     gs_secret_key: "{{ vault_secrets.gcp_secret }}" 
+#     bucket: awx_{{ env }}_objects
+#     object: "awx_schedule_{{ env }}.json" 
+#     dest: "/tmp/awx_schedule_{{ env }}.json"
+#     mode: get 
+#     overwrite: yes
+#   tags: 
+#     - never
+#     - start_schedule

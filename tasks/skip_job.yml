@@ -1,0 +1,24 @@
+---
+# Tasks for reprocessing jobs on awx
+- name: Skip flow..
+  block:
+    - name: Skipping Flow...
+      ansible.builtin.set_fact:
+        skip: true
+      when: template_name != item and pause_skip is undefined
+      loop: "{{ resume_job }}"
+      
+    - name: Reinit job ...
+      ansible.builtin.set_fact:
+        skip: false
+      when: template_name == item
+      loop: "{{ resume_job }}"
+     
+    - name: Continuing Job ...
+      ansible.builtin.set_stats:
+        data:
+          pause_skip: true
+      when: skip == false
+  tags:
+    - never
+    - skip_awx

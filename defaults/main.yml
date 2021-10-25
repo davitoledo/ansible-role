@@ -1,0 +1,8 @@
+---
+# defaults file for lmbr-ansible-role-awx-functions
+template_name: ""
+resume_job: ""
+workflow_name: ""
+wait_rescue: 60
+bypass: "no"
+try_number_check: 0

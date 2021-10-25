@@ -1,0 +1,6 @@
+- ansible.builtin.include_tasks: check_jobs.yml
+- ansible.builtin.include_tasks: hold_jobs.yml
+- ansible.builtin.include_tasks: skip_job.yml
+- ansible.builtin.include_tasks: sleep.yml
+- ansible.builtin.include_tasks: schedule.yml
+- ansible.builtin.include_tasks: count_businessday.yml

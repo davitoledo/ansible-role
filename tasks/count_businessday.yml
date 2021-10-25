@@ -1,0 +1,97 @@
+---
+- name: "Create file to count Business Days ..." 
+  block:
+    - name: Create file of the Month
+      ansible.builtin.shell: "echo 0 > /tmp/{{ ansible_date_time.year}}_business_day_{{ ansible_date_time.month }}"
+      when: ansible_date_time.day == '01'
+
+    - name: upload file to AWS
+      amazon.aws.aws_s3:
+        region: sa-east-1
+        bucket: awx-objects
+        object: "{{ ansible_date_time.year}}_business_day_{{ ansible_date_time.month }}"
+        src: "/tmp/{{ ansible_date_time.year}}_business_day_{{ ansible_date_time.month }}"
+        mode: put 
+      when: ansible_date_time.day == '01'
+  tags:
+    - never
+    - create_file
+  
+- name: "Checking Actual Business Day ..."
+  block:
+  - name: Getting File to Check ...
+    amazon.aws.aws_s3:
+      region: sa-east-1
+      bucket: awx-objects
+      object: "{{ ansible_date_time.year}}_business_day_{{ ansible_date_time.month }}"
+      dest: "/tmp/{{ ansible_date_time.year}}_business_day_{{ ansible_date_time.month }}"
+      mode: get
+    when: ansible_date_time.weekday_number >= '1' and ansible_date_time.weekday_number <= '5' 
+
+  - name: Check Business Day ...
+    ansible.builtin.shell: "cat /tmp/{{ ansible_date_time.year}}_business_day_{{ ansible_date_time.month }}"
+    register: day
+    when: ansible_date_time.weekday_number >= '1' and ansible_date_time.weekday_number <= '5'
+
+  - debug:
+      msg: "Today is the #{{ day.stdout }} business day in month {{ ansible_date_time.month }}"
+    when: ansible_date_time.weekday_number >= '1' and ansible_date_time.weekday_number <= '5'
+  
+  - name: Weekend ...
+    debug:
+      msg: "Today isn't a Business Day, so the job can't be running and not sum Day"
+    when: ansible_date_time.weekday_number == '6' or ansible_date_time.weekday_number == '7'
+  
+  - name: Set Business Day
+    ansible.builtin.set_fact: 
+      business_day: "{{ day.stdout | int }}"
+    when: ansible_date_time.weekday_number >= '1' and ansible_date_time.weekday_number <= '5'
+  tags:
+    - never
+    - check_day
+
+- name: "Counting Business Days ... Add Day in file"
+  block:    
+    - name: Getting File to Check the Business Day...
+      amazon.aws.aws_s3:
+        region: sa-east-1
+        bucket: awx-objects
+        object: "{{ ansible_date_time.year}}_business_day_{{ ansible_date_time.month }}"
+        dest: "/tmp/{{ ansible_date_time.year}}_business_day_{{ ansible_date_time.month }}"
+        mode: get
+      when: ansible_date_time.weekday_number >= '1' and ansible_date_time.weekday_number <= '5' 
+
+    - name: Check Actual Business Day ...
+      ansible.builtin.shell: "cat /tmp/{{ ansible_date_time.year}}_business_day_{{ ansible_date_time.month }}"
+      register: oldday
+      when: ansible_date_time.weekday_number >= '1' and ansible_date_time.weekday_number <= '5'
+        
+    - name: Add Day ...
+      ansible.builtin.shell: "echo $(({{ oldday.stdout | int }}+1)) > /tmp/{{ ansible_date_time.year}}_business_day_{{ ansible_date_time.month }}"
+      when: ansible_date_time.weekday_number >= '1' and ansible_date_time.weekday_number <= '5'
+
+    - name: Check new value ...
+      ansible.builtin.shell: "cat /tmp/{{ ansible_date_time.year}}_business_day_{{ ansible_date_time.month }}"
+      register: day
+      when: ansible_date_time.weekday_number >= '1' and ansible_date_time.weekday_number <= '5'
+
+    - debug:
+        msg: "Today is the #{{ day.stdout }} business day in month {{ ansible_date_time.month }}"
+      when: ansible_date_time.weekday_number >= '1' and ansible_date_time.weekday_number <= '5'
+    
+    - name: upload file to AWS
+      amazon.aws.aws_s3:
+        region: sa-east-1
+        bucket: awx-objects
+        object: "{{ ansible_date_time.year}}_business_day_{{ ansible_date_time.month }}"
+        src: "/tmp/{{ ansible_date_time.year}}_business_day_{{ ansible_date_time.month }}"
+        mode: put 
+      when: ansible_date_time.weekday_number >= '1' and ansible_date_time.weekday_number <= '5'
+    
+    - name: Weekend ...
+      debug:
+        msg: "Today isn't a Business Day, so the job can't be running and not sum Day"
+      when: ansible_date_time.weekday_number == '6' or ansible_date_time.weekday_number == '7'   
+  tags:
+    - never
+    - add_day

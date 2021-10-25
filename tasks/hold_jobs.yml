@@ -1,0 +1,46 @@
+---
+- name: "Create file to put jobs in hold in AWX-{{ env }}..."
+  ansible.builtin.shell: "> /tmp/hold_jobs_{{ env }}"
+  tags:
+    - never
+    - hold_jobs
+
+- name: "Put jobs AWX-{{ env }} in hold ..."
+  amazon.aws.aws_s3:
+    region: sa-east-1
+    bucket: awx-objects
+    object: "hold_jobs_{{ env }}"
+    src: "/tmp/hold_jobs_{{ env }}"
+    mode: put 
+  tags:
+    - never
+    - hold_jobs
+
+- name: "Return jobs execution in AWX-{{ env }}..."
+  amazon.aws.aws_s3:
+    region: sa-east-1
+    bucket: awx-objects
+    object: "hold_jobs_{{ env }}"
+    mode: delobj 
+  tags:
+    - never
+    - start_jobs
+
+- name: "Check if hold file exists to {{ env }}..." 
+  amazon.aws.aws_s3:
+    region: sa-east-1
+    bucket: awx-objects
+    prefix: "hold_jobs_{{ env }}"
+    mode: list
+  register: s3_files
+  tags: 
+    - never
+    - start_jobs
+    - hold_jobs
+
+- ansible.builtin.debug:
+    msg: "{{ s3_files.s3_keys }}"
+  tags:
+    - never
+    - start_jobs
+    - hold_jobs

@@ -1,0 +1,45 @@
+---
+- name: "Verify Condition to execute Job in {{ env }}" 
+  block:
+    - name: "Check if hold file exists to {{ env }}..."
+      amazon.aws.aws_s3:
+        region: sa-east-1
+        bucket: awx-objects
+        prefix: "hold_jobs_{{ env }}"
+        mode: list
+      register: s3_files
+
+    - ansible.builtin.debug:
+        msg: "{{ s3_files.s3_keys }}"
+      
+    - name: Waiting condition to execute the job
+      ansible.builtin.shell: "aws s3 ls s3://awx-objects/hold_jobs_{{ env }}"
+      retries: 9999
+      delay: 60
+      register: result_s3
+      until: result_s3.rc != 0
+      ignore_errors: yes
+      when: s3_files.s3_keys == ["hold_jobs_{{ env }}"]
+
+    - ansible.builtin.debug: 
+        msg: "The error above is expected and can be ignored !"
+      when: s3_files.s3_keys == ["hold_jobs_{{ env }}"]
+  
+  rescue:
+    - name: Waiting {{ wait_rescue }} seconds to retry list...
+      ansible.builtin.wait_for:
+        timeout: "{{ wait_rescue | default ('60') }}"
+      delegate_to: localhost 
+      when: try_number_check | int < 4
+    
+    - name: count
+      ansible.builtin.set_fact:
+        try_number_check:  "{{ try_number_check | int + 1 }}"
+      
+    - name: Retry - Check if hold file exist
+      ansible.builtin.include_tasks:
+        file: check_jobs.yml
+      when: try_number_check | int < 4
+  tags:
+    - never
+    - check_hold

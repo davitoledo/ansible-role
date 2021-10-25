@@ -1,0 +1,28 @@
+- name: "Check Last Execution of Workflow {{ workflow_name }}"
+  block: 
+    - name: Config tower-cli to change {{ awx_url }}
+      ansible.builtin.shell: tower-cli config host {{ awx_url }}
+      
+    - name: Config Username ...
+      ansible.builtin.shell: tower-cli config username {{ awx_user }}
+    
+    - name: Config OAuth Token ...
+      ansible.builtin.shell: tower-cli config oauth_token {{ awx_token }}
+  
+    - name: Config SSL ...
+      ansible.builtin.shell: tower-cli config verify_ssl false
+
+    - name: Checking last run of {{ workflow_name }}
+      ansible.builtin.shell: tower-cli workflow get -n {{ workflow_name }} -f json | jq -r .summary_fields.last_job.status
+      register: last_run
+
+    - debug:
+        msg: "The Last Run was {{ last_run.stdout }}, Workflow can be run!"
+      when: last_run.stdout == "successful" or bypass == 'yes' or reprocess == 'yes'
+
+    - fail:
+        msg: "The Last Run was {{ last_run.stdout }}, Workflow Stopped to verification"
+      when: last_run.stdout != "successful" and bypass == 'no' and reprocess == 'no'
+  tags:
+    - never
+    - check_workflow
