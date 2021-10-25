@@ -3,6 +3,3 @@
   ansible.builtin.wait_for:
     timeout: "{{ time }}"
   delegate_to: localhost
-  tags: 
-    - never
-    - sleep_job
